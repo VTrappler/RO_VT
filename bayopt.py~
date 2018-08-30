@@ -1,0 +1,383 @@
+# coding: utf-8
+#!/usr/bin/env python
+
+import numpy as np
+from scipy import stats
+from sklearn.gaussian_process import GaussianProcessRegressor
+from matplotlib import cm
+from matplotlib import pyplot as plt
+import itertools
+from sklearn.gaussian_process.kernels import Matern
+import scipy
+import acquisition_function
+
+#----------------------------------------------------
+
+def plot_gp(gp, X_, true_function = None, nsamples = 0, show = True):
+    """
+    Plot a 1D Gaussian Process, with CI and samples
+    """
+    y_mean, y_std = gp.predict(X_[:,np.newaxis], return_std=True)
+    if true_function is not None:
+        plt.plot(X_,true_function(X_), 'r--', lw = 3)
+    
+    plt.plot(X_, y_mean, 'k', lw=3, zorder=9)
+    plt.fill_between(X_, y_mean - y_std, y_mean + y_std,
+                 alpha=0.1, color='k', linewidth = 0.0)
+    plt.fill_between(X_, y_mean - 2*y_std, y_mean + 2*y_std,
+                 alpha=0.05, color='k', linewidth = 0.0)
+    plt.fill_between(X_, y_mean - 3*y_std, y_mean + 3*y_std,
+                     alpha=0.05, color='k', linewidth = 0.0)
+    
+    if nsamples>0:
+        y_samples = gp.sample_y(X_[:, np.newaxis], 10)
+        plt.plot(X_, y_samples, lw=1)
+
+    plt.plot(gp.X_train_, gp.y_train_, 'ob')
+    if show:
+        plt.show()
+        
+#--------------------------------------------------
+
+#--------------------------------------------------
+
+def gp_EI_computation(gp, X_, y_mean =None, y_std = None):
+    """ Compute the EI for a gp
+    """
+    if X_.ndim == 1:
+        X_ = np.atleast_2d(X_).T
+        
+    if y_mean is None or y_std is None:
+        # print ' No prediction in input, predictions will be computed'
+        y_mean, y_std = gp.predict(np.atleast_2d(X_), return_std=True)
+
+
+    pos_current_minimum = np.argmin(gp.y_train_)
+    current_minimum = gp.y_train_[pos_current_minimum]
+    m = current_minimum - y_mean
+    s = y_std
+    return acq.expected_improvement_closed_form(m,s)
+
+# -----------------------------------------------------------
+
+def quantization_operator(y):
+    """
+    Quantization operator Q in IAGO strategy
+    Args:
+       y (array): sorted real values
+    """
+    M = len(y)
+    def Q_y(u):
+        i=0
+        yi = y[0]
+        while u > yi and i<M-1:
+            i+=1
+            yi = y[i]
+        return y[i]
+    
+    return Q_y
+# Q = quantization_operator([1,2,3,4,10,55])
+# Q(5);Q(4);Q(100)
+
+# ------------------------------------------------------
+
+def conditional_globalmin_brute(gp, X_, nsamples = 1000):
+    num = 0
+    pos_argmin = np.empty(nsamples)
+    while num < nsamples:
+        y_samples = gp.sample_y(np.atleast_2d(X_).T, 10, rng)
+        pos_argmin[num: num+10] = y_samples.argmin(axis = 0);
+        num += 10
+    return X_[pos_argmin.astype(int)],pos_argmin.astype(int)
+
+#--------------------------------------------------
+
+def EGO_brute(gp_, true_function, X_, niterations = 10, plot = True):
+    """
+    EGO performed with brute force: Brute search on vector X_
+
+    Args:
+        gp_ (GaussianProcessRegressor): GP of modelling the function to minimize
+        X_ ([npoints,nfeatures] array): vector of points on which to compute and search the maximum of EI
+        true_function (func): function to minimize
+        niterations (int): number of iterations to perform
+        plot (bool): Plot the successive iteration (only for 1D and 2D problems)
+
+    Output:
+        GaussianProcessRegressor: GP of the function after the niterations
+    """
+
+    print 'Resolution of the brute search: ' + str(X_[1] - X_[0])
+    
+    if plot and X_.ndim>2:
+        print 'No plot as dim of input > 2'
+        plot = False
+    
+    gp = gp_
+    i = 0
+    while i<niterations:
+        print 'Iteration '+ str(i+1) +' of ' +str(niterations)
+
+        EI_computed = gp_EI_computation(gp,X_)
+        next_to_evaluate = acquisition_maxEI_brute(gp,X_)
+        value_evaluated = true_function(next_to_evaluate)
+        if plot:
+            if X_.ndim == 1:
+                plot_1d_strategy(gp, X_, true_function, nsamples = 5,
+                                 criterion = EI_computed, next_to_evaluate = next_to_evaluate)
+            elif X_.ndim == 2:
+                plot_2d_strategy(gp,X_, true_function, criterion = EI_computed, next_to_evaluate = next_to_evaluate)
+                
+        X = np.vstack([gp.X_train_,next_to_evaluate])
+        # X = X[:,np.newaxis]
+        y =  np.append(gp.y_train_,value_evaluated)
+        gp.fit(X, y)
+        i +=1
+        print 'Best value found so far ' + str(gp.X_train_[gp.y_train_.argmin()])
+
+
+    print '  Best value found after '+ str(niterations) +' iterations: ' + str(gp.X_train_[gp.y_train_.argmin()])
+    return gp
+
+
+#---------------------------------------------------------------------------
+
+def EGO_analytical(gp_, true_function, X_ = None, niterations = 10, plot = False, nrestart = 20, bounds = None):
+    """
+    EGO performed with optimization on the EI
+
+    Args:
+        gp_ (GaussianProcessRegressor): GP of modelling the function to minimize
+        true_function (func): function to minimize
+        niterations (int): number of iterations to perform
+        plot (bool): Plot the successive iteration (only for 1D and 2D problems)
+        X_ ([npoints,nfeatures] array): vector of points for the plots
+
+
+    Output:
+        GaussianProcessRegressor: GP of the function after the niterations
+    """
+    # if plot and X_.ndim>2:
+    #     print 'No plot as dim of input > 2'
+    #     plot = False
+
+    gp = gp_
+    i = 0
+    while i<niterations:
+        print 'Iteration '+ str(i+1) +' of ' + str(niterations)
+        
+        EI_computed = gp_EI_computation(gp,X_)
+        next_to_evaluate = acquisition_maxEI_analytical_gradientfree(gp,X_,nrestart, bounds)
+        value_evaluated = true_function(next_to_evaluate)
+
+        
+        if plot:
+            if X_.ndim == 1:
+                plot_1d_strategy(gp, X_, true_function, nsamples = 5, criterion = EI_computed,
+                                 next_to_evaluate = next_to_evaluate)
+
+            elif X_.ndim == 2:
+                plot_2d_strategy(gp,X_,true_function, criterion = EI_computed, next_to_evaluate)
+
+        X = np.vstack([gp.X_train_,next_to_evaluate])
+        # X = X[:,np.newaxis]
+        y =  np.append(gp.y_train_,value_evaluated)
+        gp.fit(X, y)
+        i +=1
+        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+
+
+    print '---  Best value found after '+ str(niterations) +' iterations: ' + str(gp.X_train_[gp.y_train_.argmin()])
+    return gp
+
+
+
+
+#--------------------------------------------------
+
+def gp_qEI_computation(gp, qPoints, nsim = 1000):
+    """
+    qPoints : [npoints,q]
+    """
+    qPoints = np.atleast_2d(qPoints)
+    npoints = qPoints.shape[0]
+    qEI = np.empty(npoints)
+    for i in xrange(npoints):
+        y_mean, q_cov = gp.predict(qPoints[i,:,np.newaxis], return_cov=True)
+        samples_MC = stats.multivariate_normal.rvs(y_mean, q_cov, nsim)
+        minY = np.min(gp.y_train_)
+        qEI[i] = np.mean(minY>samples_MC.min(1))
+    return qEI
+
+def qEI_brute(gp_, true_function, X_ = np.linspace(0,5,50), q=3, niterations = 10, nsim = 1000):
+    """
+    q steps EI performed with brute force: Brute search on vector X_
+    """
+    gp = gp_
+    i = 0
+    nn = X_.shape[0]
+    rshape = q * [nn]
+    qEI_to_evaluate = np.asarray([np.vstack(np.array(comb)) for comb in itertools.product(X_,repeat = q)]).squeeze()
+       
+    while i<niterations:
+        plot_gp(gp, X_, true_function = true_function, nsamples = 5, show = False)
+        qEI_computed = gp_qEI_computation(gp,qEI_to_evaluate, nsim).reshape(rshape)
+        
+        next_to_evaluate = X_[np.asarray(np.unravel_index(qEI_computed.argmax(), qEI_computed.shape))]
+
+        value_evaluated = true_function(next_to_evaluate)
+
+        [plt.axvline(nextpoint, ls = '--', color = 'red') for nextpoint in next_to_evaluate]
+
+        X = np.append(gp.X_train_,next_to_evaluate)
+        X = X[:,np.newaxis]
+        y =  np.append(gp.y_train_,value_evaluated)
+        gp.fit(X, y)
+        print i
+        i +=1
+        plt.show()
+        
+
+    
+
+#--------------------------------------------------
+
+def acquisition_maxEI_brute(gp,X_):
+    EI_computed = gp_EI_computation(gp,X_)
+    return X_[np.argmax(EI_computed)]
+
+#-------------------------------------------------
+
+def acquisition_maxEI_analytical_gradientfree(gp,X_,nrestart, bounds):
+    EI_lambda = lambda value_considered: -gp_EI_computation(gp,np.atleast_2d(value_considered))
+    optim_number = 1
+    rng = np.random.RandomState()
+    dim = gp.X_train_.shape[1]
+    if bounds is None:
+        bounds = dim*[(0,1)]
+    x0 = [rng.uniform(bds[0],bds[1],1) for bds in bounds]
+
+    maxEI = scipy.optimize.minimize(EI_lambda, x0 = x0, bounds = bounds)
+
+    while optim_number <= nrestart:
+        x0 = [rng.uniform(bds[0],bds[1],1) for bds in bounds]
+        optim = scipy.optimize.minimize(EI_lambda, x0 = x0, bounds = bounds) #dim*[(0,5)]
+        if optim.fun < maxEI.fun:
+            maxEI = optim
+        optim_number += 1
+
+    return maxEI.x
+
+# ------------------------------------------------
+
+def plot_1d_strategy(gp,X_, function, nsamples, criterion, next_to_evaluate):
+    plt.subplot(2,1,1)
+    plot_gp(gp, X_, true_function = function, nsamples = nsamples, show = False)
+    plt.axvline(next_to_evaluate, ls = '--', color = 'red')
+    plt.subplot(2,1,2)
+    plt.plot(X_,criterion)
+    plt.axvline(next_to_evaluate, ls = '--', color = 'red')
+    plt.plot(next_to_evaluate, criterion.max(), 'or')
+    plt.show()
+
+def plot_2d_strategy(gp,X_,function, criterion, next_to_evaluate = None):
+    """
+    plot contourf for a 2d problem
+    """
+    # X_ must be combination vector obtained by flattening a meshgrid, such that [sqn**2, :]
+    
+    
+    if next_to_evaluate is None:
+        next_to_evaluate = [np.nan,np.nan]
+        
+    sqn = int(np.sqrt(X_.shape[0]))
+    vector_to_mesh = X_[:sqn,1]
+    xmesh,ymesh = np.meshgrid(vector_to_mesh,vector_to_mesh) # Getting back the meshgrid from X_
+    y_pred_2d, y_std_2d = np.asarray(gp.predict(X_, return_std = True))
+    y_pred_2d = y_pred_2d.reshape(sqn,sqn)
+    y_std_2d = y_std_2d.reshape(sqn,sqn).T
+    true_values = function(X_)
+    #----
+    plt.subplot(2,2,1)
+    plt.contourf(xmesh,ymesh,y_pred_2d);
+    plt.colorbar()
+    plt.title('GP prediction')
+    plt.plot(gp.X_train_[:,0],gp.X_train_[:,1], 'ro')
+    plt.plot(next_to_evaluate[0],next_to_evaluate[1], '*w')
+    #----
+    plt.subplot(2,2,2)
+    plt.contourf(xmesh,ymesh,y_std_2d)
+    plt.title('GP standard deviation')
+    plt.plot(next_to_evaluate[0],next_to_evaluate[1], '*w')
+    plt.colorbar()
+    #----
+    plt.subplot(2,2,3)
+    plt.contourf(xmesh,ymesh, true_values.reshape(sqn,sqn))
+    plt.title('Real function')
+    plt.plot(gp.X_train_[:,0],gp.X_train_[:,1], 'ro')
+    plt.plot(next_to_evaluate[0],next_to_evaluate[1], '*w')
+    plt.colorbar()
+    #----
+    plt.subplot(2,2,4)
+    plt.contourf(xmesh,ymesh,criterion.reshape(sqn,sqn).T)
+    plt.plot(next_to_evaluate[0],next_to_evaluate[1], '*w')
+    plt.colorbar()
+    plt.title('EI')
+    plt.show()
+
+    
+if __name__ == '__main__':
+
+    # Initial design and evaluation
+    rng = np.random.RandomState() 
+    X = rng.uniform(0, 1, 5) + [0.0, 1.0, 2.0, 3.0, 4.0]
+    X = np.atleast_2d(X).T
+    true_function = lambda X: np.exp(-np.ravel(X)/5)*np.sin(np.ravel(X)*2)
+    y = true_function(X)
+
+    # Initialization GP
+    gp = GaussianProcessRegressor(kernel = Matern())   
+    X_ = np.linspace(0, 5, 1000)
+    # Fit
+    gp.fit(X, y)
+
+    plt.subplot(211)
+    plot_gp(gp, X_, true_function = true_function, nsamples = 5, show = False)
+    # xstar,pos_argmin = conditional_globalmin_brute(gp,X_)
+    plt.subplot(212)
+    plt.plot(X_,gp_EI_computation(gp,X_.T));plt.show()
+
+    EGO_brute(gp_ = gp , X_ = X_, true_function = true_function, niterations = 5)
+    # Reset gp
+    gp.fit(X, y)
+    qEI_brute(gp_ = gp,  true_function = true_function, q=2, niterations = 5, nsim = 1000 )
+    gp_analytical = EGO_analytical(gp, true_function, niterations = 20, X_= X_, bounds = [(0,5)], plot = True)
+
+    ##*. 2D test-------------------------------
+
+    def function_2d(X):
+        X = np.atleast_2d(X)
+        # return (X[:,0] - 2.5)**2 + (X[:,1] - 1)**2
+        return ( X[:,1] - 1)**2 + (X[:,0] - 2)**2 # + (X[:,2] - 3)**2
+    rng = np.random.RandomState()
+    ndim = 2
+    # initial_design_2d = rng.uniform(0, 5, 5*ndim).reshape(5,ndim)
+    initial_design_2d = np.array([[1,1],[2,2],[3,3],[4,4], [5,2], [1,4],[0,0],[5,5]])
+    response_2d = function_2d(initial_design_2d)
+    gp = GaussianProcessRegressor(kernel = Matern(np.ones(ndim)))
+    gp.fit(initial_design_2d, response_2d)
+
+    X_ = np.linspace(0, 5, 1000)
+    xx,yy = np.meshgrid(X_,X_, indexing = 'xy')
+    all_combinations = np.array([xx,yy]).T.reshape(-1,2)
+    EI_criterion = gp_EI_computation(gp, all_combinations)
+    
+    # plot_2d_strategy(gp,all_combinations, function_2d, EI_criterion)
+    gp_brute = EGO_brute(gp,function_2d, all_combinations, niterations = 8, plot = False)
+    EI_criterion_brute = gp_EI_computation(gp_brute, all_combinations)
+    plot_2d_strategy(gp_brute,all_combinations, function_2d, EI_criterion_brute)
+
+    gp_analytical = EGO_analytical(gp,function_2d, X_ = all_combinations, niterations = 20,
+                                    plot = False, nrestart = 20, bounds = [(0,5)]*2)
+    EI_criterion_analytical = gp_EI_computation(gp_analytical, all_combinations)
+    plot_2d_strategy(gp_analytical, all_combinations, function_2d, EI_criterion_analytical)
