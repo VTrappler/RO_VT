@@ -353,6 +353,9 @@ def eval_array_separate_variables(gp, value_to_change, value_to_fix, idx_to_fix)
 
 # --------------------------------------------------------------------------
 def slicer_gp_predict(gp, value_to_fix, idx_to_fix, return_std=True):
+    """
+    Prediction function of the gp for 'value_to_fix' fixed.
+    """
     def fun_to_return(value_to_change):
         evalsep = eval_array_separate_variables(gp, value_to_change, value_to_fix, idx_to_fix)
         return gp.predict(evalsep, return_std=return_std)
@@ -360,9 +363,15 @@ def slicer_gp_predict(gp, value_to_fix, idx_to_fix, return_std=True):
 
 
 # --------------------------------------------------------------------------
-def find_minimum_sliced(gp, value_to_fix, idx_to_fix, bounds = None, nrestart = 10):
+def find_minimum_sliced(gp, value_to_fix, idx_to_fix, bounds = None,
+                        nrestart = 10, coefficient=1.0):
+    """
+    For a value 'value_to_fix', that is the argument indexed by 'idx_to_fix', 
+    Finds minimum of the prediction of the gaussian process when the other
+    arguments vary
+    """
     fun_ = slicer_gp_predict(gp, value_to_fix, idx_to_fix, return_std=False)
-    fun = lambda X_: fun_(np.atleast_2d(X_).T)[0]
+    fun = lambda X_: fun_(np.atleast_2d(X_)) * coefficient
     optim_number = 1
     rng = np.random.RandomState()
     dim = gp.X_train_.shape[1] - len(idx_to_fix)
@@ -380,7 +389,7 @@ def find_minimum_sliced(gp, value_to_fix, idx_to_fix, bounds = None, nrestart = 
             [x0] = x0
         else:
             x0 = np.asarray(x0).reshape(-1)
-        optim = scipy.optimize.minimize(fun, x0=x0, bounds = bounds)
+        optim = scipy.optimize.minimize(fun, x0=x0, bounds=bounds)
         if optim.fun < current_minimum.fun:
             current_minimum = optim
         optim_number += 1
@@ -436,13 +445,11 @@ def PI_alpha_allspace(gp, alpha, idx_to_explore, X_to_minimize,
 def PI_alpha_check_tol(gp, idx_to_explore, X_to_minimize, X_to_explore, ptol = 1.0,
                        bounds = None, nrestart = 10, delta_alpha = 0.01, alpha_start = 1.0,
                        PI = True):
+    """ Compute the value of alpha, such that the gp prediction is below alpha*minimum 
+        with probability ptol
+    """
 
-    # mini, maxi = find_extrema_gp(gp, bounds_allspace, 20)
-    # if mini.fun < 0:
-    #     print 'Minimum of gp prediction < 0, no alpha can be found'
-    #     raise NameError('Stop before infinite loop')
-    # else:
-    #     print 'alpha < maximum/minimum = ', maxi.fun / mini.fun
+
 
     if ptol > 1.0:
         print 'No solution for ptol > 1, set at 1.0'
@@ -570,12 +577,12 @@ def proj_mean_gp(gp, grid_K, idxU, nsamples=100, bounds=None):
     _, ndim = gp.X_train_.shape
     idxK = filter(lambda i: i in range(ndim) and i not in idxU, range(ndim))
     if bounds is None:
-        bounds_U = len(idxU) * [(0, 1)]
+        bounds_U = len(idxU) * [[0, 1]]
     else:
-        bounds_U = bounds[idxU, :]
+        bounds_U = bounds[[int(x) for x in idxU], :]
 
     LHS_U = pyDOE.lhs(n=len(idxU), samples=nsamples)
-    LHS_U = inv_transformation_variable_to_unit(LHS_U, bounds_U)
+    LHS_U = inv_transformation_variable_to_unit(LHS_U, np.asarray(bounds_U))
     mean_U = np.empty(len(grid_K))
     var_U = np.empty(len(grid_K))
     for i, kk in enumerate(grid_K):
@@ -768,6 +775,270 @@ def EI_VAR(gp_, true_function, idx_U, X_ = None, niterations = 10,
 
 
 # --------------------------------------------------------------------------
+def LHS_to_eval(npointsLHS, idx_LHS, cst, idx_cst, bounds):
+    ndimLHS = len(idx_LHS)
+    LHS01 = pyDOE.lhs(ndimLHS, samples=npointsLHS, criterion ='m', iterations=100)
+    LHS = inv_transformation_variable_to_unit(LHS01, bounds[idx_LHS, :])
+    ndim = len(idx_LHS) + len(idx_cst)
+    to_eval = np.zeros([npointsLHS, ndim])
+    to_eval[:, idx_LHS] = LHS
+    to_eval[:, idx_cst] = cst
+    return to_eval
+
+
+# --------------------------------------------------------------------------
+def EI_MC_initial_design(true_function, idx_K, idx_U, ninitial = None,
+                         npoints_LHS=30, bounds=None, LHS_K = True):
+    ndim = len(idx_K) + len(idx_U)
+    if bounds is None:
+        bounds = ndim * [(0, 1)]
+
+    if ninitial is None:
+        ninitial = 10 * ndim
+    if LHS_K:
+        LHS_K = inv_transformation_variable_to_unit(pyDOE.lhs(len(idx_K),
+                                                              ninitial,
+                                                              criterion = 'm',
+                                                              iterations=100),
+                                                    bounds[idx_K, :])
+    else:
+        print 'Only available for dimK = 1'
+        LHS_K = inv_transformation_variable_to_unit(np.linspace(0, 1, ninitial),
+                                                    bounds[idx_K, :])
+
+    meanvec = np.zeros(len(LHS_K))
+    varvec = np.zeros(len(LHS_K))
+    for i, k in enumerate(LHS_K):
+        LHS = LHS_to_eval(npoints_LHS, idx_U, k, idx_K, bounds)
+        eval_sample = true_function(LHS)
+        meanvec[i] = eval_sample.mean()
+        varvec[i] = eval_sample.var()
+    return LHS_K, meanvec, varvec
+
+
+# --------------------------------------------------------------------------
+def EI_MC(gp_, true_function, idx_U, X_ = None, niterations = 10,
+          plot = False, nrestart = 20, bounds = None, nsamples = 200):
+    """
+    EI VAR algorithm performed with optimization on the EI, and on VAR
+
+    Args:
+        gp_ (GaussianProcessRegressor): GP of modelling the function
+                                        to minimize
+        true_function (func): function to minimize
+        idx_U (list of int): indices corresponding to the uncertain variables
+        niterations (int): number of iterations to perform
+        plot (bool): Plot the successive iteration
+                     (only for 1D and 2D problems)
+        X_ ([npoints,nfeatures] array): vector of points for the plots
+
+
+    Output:
+        GaussianProcessRegressor: GP of the function after the niterations
+    """
+    # if plot and X_.ndim>2:
+    #     print 'No plot as dim of input > 2'
+    #     plot = False
+
+    gp = copy.copy(gp_)
+    i = 0
+    while i < niterations:
+        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        next_to_evaluate, maxEI = acquisition_EI_VAR(gp, idx_U, nrestart, bounds, nsamples)
+        print '  maxEI = ' + str(maxEI)
+        print '  next to evaluate = ' + str(next_to_evaluate)
+        value_evaluated = true_function(next_to_evaluate)
+
+        if plot:
+            EI_computed = acq.gp_EI_computation(gp, X_)
+
+            if X_.ndim == 1:
+                bplt.plot_1d_strategy(gp, X_, true_function, nsamples=5,
+                                      criterion=EI_computed,
+                                      next_to_evaluate=next_to_evaluate)
+
+            elif X_.ndim == 2:
+                bplt.plot_2d_strategy(gp, X_, true_function,
+                                      criterion=EI_computed,
+                                      next_to_evaluate=next_to_evaluate)
+
+        X = np.vstack([gp.X_train_, next_to_evaluate])
+        # X = X[:,np.newaxis]
+        y = np.append(gp.y_train_, value_evaluated)
+        gp.fit(X, y)
+        i += 1
+        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+
+    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
+        + str(gp.X_train_[gp.y_train_.argmin()])
+
+    final_dec = final_decision_quantile_EIVAR(gp, idx_U, nrestart=500,
+                                              bounds=bounds, nsamples=nsamples)
+
+    print '--- Final decision' + str(final_dec)
+    return gp, final_dec
+
+
+# --------------------------------------------------------------------------
+def gp_worst_case_fixedgrid(gp, idx_K, K_array, bounds=None, full_output=False):
+    _, ndim = gp.X_train_.shape
+    idx_U = filter(lambda i: i in range(ndim) and i not in idx_K, range(ndim))
+
+    if bounds is None:
+        bounds_U = len(idx_U) * [(0, 1)]
+    else:
+        bounds_U = bounds[idx_U, :]
+
+    if full_output:
+        worst_perf = np.zeros(np.asarray(K_array).shape)
+
+    k_current_wc = K_array[0]
+    current_minimum = find_minimum_sliced(gp, value_to_fix=K_array[0],
+                                          idx_to_fix=idx_K,
+                                          bounds=bounds_U,
+                                          nrestart=100,
+                                          coefficient=-1.0)  # Find maximum on the slice
+    print current_minimum
+    if full_output:
+        worst_perf[0] = -current_minimum.fun
+    for index, k in enumerate(K_array[1:]):
+        minimum_at_k = find_minimum_sliced(gp, value_to_fix=k,
+                                           idx_to_fix=idx_K,
+                                           bounds=bounds_U,
+                                           nrestart=100,
+                                           coefficient=-1.0)  # Find maximum on the slice
+        print -minimum_at_k.fun, -current_minimum.fun
+        if full_output:
+            worst_perf[index + 1] = -minimum_at_k.fun
+        if -minimum_at_k.fun < -current_minimum.fun:
+            current_minimum = minimum_at_k
+            k_current_wc = k
+    if full_output:
+        return k_current_wc, -current_minimum.fun, worst_perf
+    else:
+        return k_current_wc, -current_minimum.fun
+
+
+# --------------------------------------------------------------------------
+
+def PEI_threshold(gp, u, idxU, boundsK):
+    min_pred = find_minimum_sliced(gp, u, idxU, bounds=[boundsK.T]).fun
+    # return min_pred
+    return max([min_pred, gp.y_train_.min()])
+
+
+def PEI_comb(gp, comb, idxU, bounds):
+    _, ndim = gp.X_train_.shape
+    N = comb.shape[0]
+    idxK = filter(lambda i: i in range(ndim) and i not in idxU, range(ndim))
+    vals = np.empty(N)
+    for i, ku in enumerate(comb):
+        thres = PEI_threshold(gp, ku[idxU], idxU, bounds[idxK, :])
+        fun_ufixed = slicer_gp_predict(gp, ku[idxU], idxU, return_std=True)
+        m, s = fun_ufixed(np.atleast_2d(ku[idxK]).T)
+        vals[i] = acq.expected_improvement_closed_form(thres - m, s)
+    return vals
+
+
+def profilePEI(gp, u, idxU, boundsK):
+    thres = PEI_threshold(gp, u, idxU, boundsK)
+    fun_ufixed = slicer_gp_predict(gp, u, idxU, return_std=True)
+
+    def PEI_u(k):
+        m, s = fun_ufixed(np.atleast_2d(k).T)
+        return -acq.expected_improvement_closed_form(m - thres, s)
+    x0 = [rng.uniform(bds[0], bds[1], 1) for bds in boundsK]
+    current_max = scipy.optimize.minimize(PEI_u, x0, bounds=boundsK)
+    for i in xrange(10):
+        x0 = [rng.uniform(bds[0], bds[1], 1) for bds in boundsK]
+        temp_max = scipy.optimize.minimize(PEI_u, x0, bounds=boundsK)
+        if temp_max > current_max:
+            current_max = temp_max
+    return current_max.x
+
+
+
+def acquisition_PEI_joint(gp, nrestart, idxU, bounds):
+    optim_number = 1
+    rng = np.random.RandomState()
+    dim = gp.X_train_.shape[1]
+    if bounds is None:
+        bounds = dim * [(0, 1)]
+
+    def fun_to_minimize(ku):
+        return -PEI_comb(gp, np.atleast_2d(ku), idxU, bounds)
+
+    x0 = [rng.uniform(bds[0], bds[1], 1) for bds in bounds]
+    maxPEI = scipy.optimize.minimize(fun_to_minimize, x0=x0, bounds=bounds)
+    while optim_number < nrestart:
+        x0 = [rng.uniform(bds[0], bds[1], 1) for bds in bounds]
+        maxtemp = scipy.optimize.minimize(fun_to_minimize, x0=x0, bounds=bounds)
+        if maxtemp.fun < maxPEI.fun:
+            maxPEI = maxtemp
+        optim_number += 1
+    return maxPEI.x
+
+
+
+
+
+def PEI_algo(gp_, true_function, idx_U, X_ = None, niterations = 10,
+             plot = False, nrestart = 20, bounds = None):
+    """
+    exploEGO performed with optimization on the EI
+
+    Args:
+        gp_ (GaussianProcessRegressor): GP of modelling the function
+                                        to minimize
+        true_function (func): function to minimize
+        niterations (int): number of iterations to perform
+        plot (bool): Plot the successive iteration
+                     (only for 1D and 2D problems)
+        X_ ([npoints,nfeatures] array): vector of points for the plots
+
+
+    Output:
+        GaussianProcessRegressor: GP of the function after the niterations
+    """
+    # if plot and X_.ndim>2:
+    #     print 'No plot as dim of input > 2'
+    #     plot = False
+
+    gp = copy.copy(gp_)
+    i = 0
+    while i < niterations:
+        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+
+        next_to_evaluate = acquisition_PEI_joint(gp, nrestart, idx_U, bounds)
+        value_evaluated = true_function(next_to_evaluate)
+
+        if plot:
+            PEI_computed = PEI_comb(gp, X_, idx_U, bounds)
+
+            if X_.ndim == 1:
+                bplt.plot_1d_strategy(gp, X_, true_function, nsamples=5,
+                                      criterion=PEI_computed,
+                                      next_to_evaluate=next_to_evaluate)
+
+            elif X_.ndim == 2:
+                bplt.plot_2d_strategy(gp, X_, true_function,
+                                      criterion=PEI_computed,
+                                      next_to_evaluate=next_to_evaluate)
+
+        X = np.vstack([gp.X_train_, next_to_evaluate])
+        # X = X[:,np.newaxis]
+        y = np.append(gp.y_train_, value_evaluated)
+        gp.fit(X, y)
+        i += 1
+        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+
+    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
+        + str(gp.X_train_[gp.y_train_.argmin()])
+    return gp
+
+
+# --------------------------------------------------------------------------
+
 if __name__ == '__main__':
     rng = np.random.RandomState()
     X = rng.uniform(0, 1, 5) + [0.0, 1.0, 2.0, 3.0, 4.0]
@@ -802,11 +1073,11 @@ if __name__ == '__main__':
     plt.yticks([], [])
     # entropy_test = acq.conditional_entropy(gp, np.linspace(0, 1, 100), X_, M=10, nsamples = 5000)
     ax2c = ax2.twinx()
-    ln3 = ax2c.plot(np.linspace(0, 1, 100), -entropy_test, 'm')
+    # ln3 = ax2c.plot(np.linspace(0, 1, 100), -entropy_test, 'm')
     plt.yticks([], [])
     ax2c.plot(np.nan, 'r', label = 'EI')
     ax2c.plot(np.nan, 'b', label = 'PI')
-    ax2c.plot(np.nan, 'm', label = '-Conditional entropy')
+    # ax2c.plot(np.nan, 'm', label = '-Conditional entropy')
     plt.legend(loc = 'upper left')
     plt.title('Optimization-oriented acquisition functions')
     plt.tight_layout()
@@ -841,16 +1112,20 @@ if __name__ == '__main__':
         # return (X[:,0] - 2.5)**2 + (X[:,1] - 1)**2
         return 1 + (X[:, 1] - 0.3)**2 + (X[:, 0] - 0.9)**2  # + (X[:,2] - 3)**2
 
-    def branin_2d(X):
+    def branin_2d(X, damp = 1.0, switch = False):
         """ Scaled branin function:
         global minimizers are
         [0.124, 0.818], [0.54277, 0.1513], [0.96133, 0.16466]
         """
         X = np.atleast_2d(X)
-        x1 = X[:, 0] * 15.0 - 5
-        x2 = X[:, 1] * 15.0
-        return 10 + 10 * (1 - (1 / (8 * np.pi))) * np.cos(x1) +\
-            (x2 - (5.1 / (4 * np.pi**2)) * x1**2 + (5 / np.pi) * x1 - 6)**2
+        y, x = X[:, 1], X[:, 0]
+        if switch:
+            x, y = y, x
+        x2 = 15 * y
+        x1 = 15 * x - 5
+        quad = (x2 - (5.1 / (4 * np.pi**2)) * x1**2 + (5 / np.pi) * x1 - 6)**2
+        cosi = (10 - (10 / np.pi * 8)) * np.cos(x1) - 44.81
+        return (quad + cosi) / (51.95 * damp) + 2.0
     # Xmin1 = [0.124, 0.818]
     # Xmin2 = [0.51277, 0.1513]
     # Xmin3 = [0.96133, 0.16466]
@@ -876,19 +1151,23 @@ if __name__ == '__main__':
             + 0.8 * np.exp(-(x - 5)**2 / 4 - (y)**2 / 4) \
             + np.exp(-(x - 5)**2 / 4 - (y - 5)**2 / 4) \
             + (1 / (1 + x + y)) / 25  # + 50 * np.exp((-(y - 2.5)**2 + -(x - 5)**2) / 2)
-    function_2d = lambda X: two_valleys(X, 1)#, np.pi / 4)
+    function_2d = lambda X: two_valleys(X, 1)  # , np.pi / 4)
+
+
+    function_2d = branin_2d
     # function_2d = rosenbrock_general
     rng = np.random.RandomState()
     ndim = 2
+    bounds = np.asarray([[0, 1], [0, 1]])
 
     # initial_design_2d = np.array([[1,1],[2,2],[3,3],[4,4], [5,2], [1,4],[0,0],[5,5], [4,1]])/5.0
-    initial_design_2d = pyDOE.lhs(n=2, samples=20, criterion='maximin',
+    initial_design_2d = pyDOE.lhs(n=2, samples=10, criterion='maximin',
                                   iterations=50)
     response_2d = function_2d(initial_design_2d)
-    gp = GaussianProcessRegressor(kernel = Matern(np.ones(ndim) / 5.0))
+    gp = GaussianProcessRegressor(kernel = Matern(np.ones(ndim) / 5.0), n_restarts_optimizer=50)
     gp.fit(initial_design_2d, response_2d)
 
-    X_ = np.linspace(0, 1, 200)
+    X_ = np.linspace(0, 1, 100)
     xx, yy = np.meshgrid(X_, X_, indexing = 'ij')
     all_combinations = np.array([xx, yy]).T.reshape(-1, 2, order = 'F')
     EI_criterion = acq.gp_EI_computation(gp, all_combinations)
@@ -898,20 +1177,31 @@ if __name__ == '__main__':
 
     bplt.plot_2d_strategy(gp, all_combinations, function_2d, EI_criterion)
     # bplt.plot_2d_strategy(gp, all_combinations, function_2d, -cond_entropy_2d)
-    # mean_U, var_U = proj_mean_gp(gp, grid_K=np.arange(0, 1, 0.01), idxU=[1], nsamples = 1000)
+    mean_U, var_U = proj_mean_gp(gp, grid_K=np.arange(0, 1, 0.01),
+                                 idxU=[1], nsamples = 1000, bounds = bounds)
     plt.plot(mean_U)
     plt.plot(mean_U + np.sqrt(var_U))
     plt.plot(mean_U - np.sqrt(var_U))
     plt.show()
 
+    PEI_joint = PEI_algo(gp, function_2d,
+                         idx_U = [1], nrestart = 10,
+                         X_ = all_combinations,
+                         niterations = 100, plot = False, bounds=np.asarray(bounds))
+    PEI_crit = PEI_comb(PEI_joint, all_combinations, [1], np.asarray(bounds))
+    bplt.plot_2d_strategy(PEI_joint, all_combinations, function_2d,
+                          PEI_crit, criterion_plottitle = 'PEI',
+                          show = True, cond_min = True)
+    
+
     # EGO brute ------------------------------
-    gp_brute = EGO_brute(gp, function_2d, all_combinations, niterations=5, plot=True)
+    gp_brute = EGO_brute(gp, function_2d, all_combinations, niterations=100, plot=False)
     EI_criterion_brute = acq.gp_EI_computation(gp_brute, all_combinations)
     bplt.plot_2d_strategy(gp_brute, all_combinations, function_2d, EI_criterion_brute)
 
 
     # EGO analytical -------------------------
-    gp_analytical = EGO_analytical(gp, function_2d, X_ = all_combinations, niterations = 50,
+    gp_analytical = EGO_analytical(gp, function_2d, X_ = all_combinations, niterations = 100,
                                    plot = False, nrestart = 30, bounds = [(0, 1)] * 2)
     EI_criterion_analytical = acq.gp_EI_computation(gp_analytical, all_combinations)
     bplt.plot_2d_strategy(gp_analytical, all_combinations, function_2d, EI_criterion_analytical)
@@ -925,7 +1215,7 @@ if __name__ == '__main__':
     bplt.plot_2d_strategy(gp_explo_EGO, all_combinations, function_2d, EI_criterion_analytical)
 
     # EI VAR -----------------------------------
-    gp_EIVAR = EI_VAR(gp, function_2d, idx_U=[1], X_=all_combinations, niterations=20,
+    gp_EIVAR = EI_VAR(gp, function_2d, idx_U=[1], X_=all_combinations, niterations=3,
                       nrestart=10, bounds=None, nsamples=20)
 
     # IAGO -------------------------------------
@@ -937,7 +1227,9 @@ if __name__ == '__main__':
                          X_=all_combinations_reduced,
                          niterations = 5, M = 3, nsamples = 100, plot = True)
 
-
+    # Worst-case ------------------------------
+    k_wc, _ = gp_worst_case_fixedgrid(gp, [0], X_, bounds=None)
+    bplt.plot_2d_strategy(gp, all_combinations, function_2d, EI_criterion_analytical)
 
 
     # Slicer Test -----------------------------------------------------

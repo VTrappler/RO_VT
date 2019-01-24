@@ -125,8 +125,6 @@ def acquisition_LCB(gp, kappa, nrestart, bounds):
     return minLCB.x
 
 
-
-
 # -----------------------------------------------------------------------------
 def gp_qEI_computation_brute(gp, qPoints, nsim=1000):
     """
