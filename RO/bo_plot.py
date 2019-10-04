@@ -61,7 +61,7 @@ def plot_1d_strategy(gp, X_, function, nsamples, criterion, next_to_evaluate):
 
 # ------------------------------------------------------------------------------
 def plot_2d_strategy(gp, X_, function, criterion, next_to_evaluate = None,
-                     criterion_plottitle = 'EI'):
+                     criterion_plottitle = 'EI', show = True, cond_min = False):
     """
     plot contourf for a 2d problem
     """
@@ -97,6 +97,10 @@ def plot_2d_strategy(gp, X_, function, criterion, next_to_evaluate = None,
     plt.title('Real function')
     plt.plot(gp.X_train_[:, 0], gp.X_train_[:, 1], 'ro')
     plt.plot(next_to_evaluate[0], next_to_evaluate[1], '*w')
+    if cond_min:
+        minimizers = [vector_to_mesh[true_values.reshape(sqn, sqn)[:, i].argmin()]
+                      for i in xrange(len(vector_to_mesh))]
+        plt.plot(minimizers, vector_to_mesh, '.w')
     plt.colorbar()
     # ---
     plt.subplot(2, 2, 4)
@@ -104,7 +108,11 @@ def plot_2d_strategy(gp, X_, function, criterion, next_to_evaluate = None,
     plt.plot(next_to_evaluate[0], next_to_evaluate[1], '*w')
     plt.colorbar()
     plt.title(criterion_plottitle)
-    plt.show()
+
+    if show:
+        plt.tight_layout()
+        plt.show()
+
 
 
 def plot2d_gp(gp, NpointsX, NpointsY=None, plot_evals=True):

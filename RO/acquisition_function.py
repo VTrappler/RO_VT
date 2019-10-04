@@ -5,6 +5,7 @@ import numpy as np
 import scipy
 import copy
 
+
 # -----------------------------------------------------------------------------
 def expected_improvement_closed_form(m, s):
     """ Analytical form of the EI (m centered)
@@ -139,15 +140,6 @@ def gp_qEI_computation_brute(gp, qPoints, nsim=1000):
         minY = np.min(gp.y_train_)
         qEI[i] = np.mean(minY > samples_MC.min(1))
     return qEI
-
-
-# -----------------------------------------------------------------------------
-# def qp_qEI_CL(gp, qPoints, bounds, nsim=1000, L=None):
-#     """
-#     """
-#     maximizerEI = acquisition_maxEI_analytical_gradientfree(gp, 50, bounds)
-#     # ycandidates = gp.sample_y(maximizerEI, 50)
-#     gp_CL = gp_fitted_candidate(gp, maximizerEI, L)
 
 
 # -----------------------------------------------------------------------------

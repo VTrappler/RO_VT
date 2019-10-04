@@ -10,6 +10,7 @@ import sys
 # import os
 import pyDOE
 import copy
+import warnings
 
 sys.path.append("/home/victor/These/source_code/bayesian_optimization_VT")
 
@@ -361,7 +362,6 @@ def slicer_gp_predict(gp, value_to_fix, idx_to_fix, return_std=True):
         return gp.predict(evalsep, return_std=return_std)
     return fun_to_return
 
-
 # --------------------------------------------------------------------------
 def find_minimum_sliced(gp, value_to_fix, idx_to_fix, bounds = None,
                         nrestart = 10, coefficient=1.0):
@@ -376,12 +376,9 @@ def find_minimum_sliced(gp, value_to_fix, idx_to_fix, bounds = None,
     rng = np.random.RandomState()
     dim = gp.X_train_.shape[1] - len(idx_to_fix)
     if bounds is None:
-        bounds = dim * [(0, 1)]
-    x0 = [rng.uniform(bds[0], bds[1], 1) for bds in bounds]
-    if len(x0) == 1:
-        [x0] = x0
-    else:
-        x0 = np.asarray(x0).reshape(-1, 1)
+        bounds = np.asarray(dim * [(0, 1)])
+
+    x0 = np.asarray([rng.uniform(bds[0], bds[1], 1) for bds in bounds]).squeeze()
     current_minimum = scipy.optimize.minimize(fun, x0=x0, bounds=bounds)
     while optim_number <= nrestart:
         x0 = [rng.uniform(bds[0], bds[1], 1) for bds in bounds]
@@ -922,26 +919,54 @@ def gp_worst_case_fixedgrid(gp, idx_K, K_array, bounds=None, full_output=False):
 
 # --------------------------------------------------------------------------
 def PEI_threshold(gp, u, idxU, boundsK):
+<<<<<<< HEAD:bo_wrapper.py
+    min_pred = find_minimum_sliced(gp, u, idxU, bounds=boundsK).fun
+=======
     min_pred = find_minimum_sliced(gp, u, idxU, bounds=[boundsK.T]).fun
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
     # return min_pred
     return max([min_pred, gp.y_train_.min()])
 
 
+<<<<<<< HEAD
 # --------------------------------------------------------------------------
+=======
+<<<<<<< HEAD:bo_wrapper.py
+# --------------------------------------------------------------------------
+=======
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
+>>>>>>> 6ee6b97291dc3792692530c38c2e5de5b72830e9
 def PEI_comb(gp, comb, idxU, bounds):
     _, ndim = gp.X_train_.shape
     N = len(comb)
     idxK = filter(lambda i: i in range(ndim) and i not in idxU, range(ndim))
     vals = np.empty(N)
+<<<<<<< HEAD:bo_wrapper.py
+    # print 'start enum'
+    for i, ku in enumerate(comb):
+        thres = PEI_threshold(gp, ku[idxU], idxU, bounds[idxK, :])
+        # print thres
+        fun_ufixed = slicer_gp_predict(gp, ku[idxU], idxU, return_std=True)
+        m, s = fun_ufixed(np.atleast_2d(ku[idxK]))
+        # print acq.expected_improvement_closed_form(thres - m, s)
+=======
     for i, ku in enumerate(comb):
         thres = PEI_threshold(gp, ku[idxU], idxU, bounds[idxK, :])
         fun_ufixed = slicer_gp_predict(gp, ku[idxU], idxU, return_std=True)
         m, s = fun_ufixed(np.atleast_2d(ku[idxK]).T)
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
         vals[i] = acq.expected_improvement_closed_form(thres - m, s)
     return vals
 
 
+<<<<<<< HEAD
 # --------------------------------------------------------------------------
+=======
+<<<<<<< HEAD:bo_wrapper.py
+# --------------------------------------------------------------------------
+=======
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
+>>>>>>> 6ee6b97291dc3792692530c38c2e5de5b72830e9
 def profilePEI(gp, u, idxU, boundsK):
     thres = PEI_threshold(gp, u, idxU, boundsK)
     fun_ufixed = slicer_gp_predict(gp, u, idxU, return_std=True)
@@ -959,7 +984,15 @@ def profilePEI(gp, u, idxU, boundsK):
     return current_max.x
 
 
+<<<<<<< HEAD
 # --------------------------------------------------------------------------
+=======
+<<<<<<< HEAD:bo_wrapper.py
+# --------------------------------------------------------------------------
+=======
+
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
+>>>>>>> 6ee6b97291dc3792692530c38c2e5de5b72830e9
 def acquisition_PEI_joint(gp, nrestart, idxU, bounds):
     optim_number = 1
     rng = np.random.RandomState()
@@ -970,9 +1003,20 @@ def acquisition_PEI_joint(gp, nrestart, idxU, bounds):
     def fun_to_minimize(ku):
         return -PEI_comb(gp, np.atleast_2d(ku), idxU, bounds)
 
+<<<<<<< HEAD:bo_wrapper.py
+    x0 = np.asarray([rng.uniform(bds[0], bds[1], 1) for bds in bounds]).squeeze()
+    # print x0, 'ok'
+    # print 'b ', fun_to_minimize(x0)
+
+    maxPEI = scipy.optimize.minimize(fun_to_minimize, x0=x0, bounds=bounds)
+    print maxPEI
+    while optim_number < nrestart:
+        print 'loop restart'
+=======
     x0 = [rng.uniform(bds[0], bds[1], 1) for bds in bounds]
     maxPEI = scipy.optimize.minimize(fun_to_minimize, x0=x0, bounds=bounds)
     while optim_number < nrestart:
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
         x0 = [rng.uniform(bds[0], bds[1], 1) for bds in bounds]
         maxtemp = scipy.optimize.minimize(fun_to_minimize, x0=x0, bounds=bounds)
         if maxtemp.fun < maxPEI.fun:
@@ -981,9 +1025,20 @@ def acquisition_PEI_joint(gp, nrestart, idxU, bounds):
     return maxPEI.x
 
 
+<<<<<<< HEAD
 # --------------------------------------------------------------------------
 def PEI_algo(gp_, true_function, idx_U, X_=None,
              niterations = 10,
+=======
+<<<<<<< HEAD:bo_wrapper.py
+# --------------------------------------------------------------------------
+=======
+
+
+
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
+def PEI_algo(gp_, true_function, idx_U, X_ = None, niterations = 10,
+>>>>>>> 6ee6b97291dc3792692530c38c2e5de5b72830e9
              plot = False, nrestart = 20, bounds = None):
     """
     exploEGO performed with optimization on the EI
@@ -1011,7 +1066,14 @@ def PEI_algo(gp_, true_function, idx_U, X_=None,
         print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
 
         next_to_evaluate = acquisition_PEI_joint(gp, nrestart, idx_U, bounds)
+<<<<<<< HEAD
         print('next: {}'.format(next_to_evaluate))
+=======
+<<<<<<< HEAD:bo_wrapper.py
+        print 'acq end'
+=======
+>>>>>>> 22d2c8cf9b675022e083e2b614234891672e65f2:RO/bo_wrapper.py
+>>>>>>> 6ee6b97291dc3792692530c38c2e5de5b72830e9
         value_evaluated = true_function(next_to_evaluate)
 
         if plot:
@@ -1365,8 +1427,12 @@ if __name__ == '__main__':
     gp4d.fit(initial_design_4d, response_4d)
 
     gp_analytical_4d = EGO_analytical(gp4d, rosenbrock_general,
-                                      X_ = initial_design_4d, niterations = 100,
+                                      X_ = initial_design_4d, niterations = 10,
                                       plot = False, nrestart=50,
                                       bounds = [(0, 1)] * NDIM)
     gp_EIVAR = EI_VAR(gp4d, rosenbrock_general, idx_U=[8, 9], X_=None, niterations=5,
                       nrestart=2, bounds=None, nsamples=2)
+    
+    bounds = np.asarray([(0, 1)] * NDIM)
+    gp_PEI = PEI_algo(gp4d, rosenbrock_general, idx_U=[8, 9], X_=None,
+                      niterations=10, plot=False, nrestart=20, bounds=bounds)
