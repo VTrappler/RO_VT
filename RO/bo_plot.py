@@ -4,6 +4,7 @@
 # from sklearn.gaussian_process import GaussianProcessRegressor
 
 from matplotlib import pyplot as plt
+import matplotlib.tri as tri
 import numpy as np
 
 
@@ -76,7 +77,7 @@ def plot_2d_strategy(gp, X_, function, criterion, next_to_evaluate = None,
     y_pred_2d = y_pred_2d.reshape(sqn, sqn)
     y_std_2d = y_std_2d.reshape(sqn, sqn)
     true_values = function(X_)
-
+    # BETTER WITH TRIANGULATION, ALLOWS FOR IRREGULAR GRIDS
     # ---
     plt.subplot(2, 2, 1)
     plt.contourf(xmesh, ymesh, y_pred_2d)
@@ -104,3 +105,22 @@ def plot_2d_strategy(gp, X_, function, criterion, next_to_evaluate = None,
     plt.colorbar()
     plt.title(criterion_plottitle)
     plt.show()
+
+
+def plot2d_gp(gp, NpointsX, NpointsY=None, plot_evals=True):
+    """
+    plot triangular interpolation of the gaussian process based on the training data
+    """
+    if NpointsY is None:
+        NpointsY = NpointsX
+    X, Y = gp.X_train_[:, 0], gp.X_train_[:, 1]
+    triangulation = tri.Triangulation(X, Y)
+    interpolator = tri.LinearTriInterpolator(triangulation, gp.y_train_)
+    X_plt = np.linspace(X.min(), X.max(), NpointsX)
+    Y_plt = np.linspace(Y.min(), Y.max(), NpointsY)
+    X_mg, Y_mg = np.meshgrid(X_plt, Y_plt)
+    interpolation = interpolator(X_mg, Y_mg)
+    plt.contourf(X_mg, Y_mg, interpolation)
+
+    if plot_evals:
+        plt.plot(X, Y, '.r', markersize=0.8)

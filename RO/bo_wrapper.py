@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from matplotlib import pyplot as plt
@@ -8,11 +7,12 @@ import itertools
 from sklearn.gaussian_process.kernels import Matern
 import scipy
 import sys
-import os
+# import os
 import pyDOE
 import copy
 
-sys.path.append("/home/victor/These/Bayesian_SWE/bayesian_optimization_VT")
+sys.path.append("/home/victor/These/source_code/bayesian_optimization_VT")
+
 import acquisition_function as acq
 import bo_plot as bplt
 
@@ -46,16 +46,16 @@ def EGO_brute(gp_, true_function, X_, niterations=10, plot=True):
         GaussianProcessRegressor: GP of the function after the niterations
     """
 
-    print 'Resolution of the brute search: ' + str(X_[1] - X_[0])
+    print('Resolution of the brute search: ' + str(X_[1] - X_[0]))
 
     if plot and X_.ndim > 2:
-        print 'No plot as dim of input > 2'
+        print('No plot as dim of input > 2')
         plot = False
 
     gp = copy.copy(gp_)
     i = 0
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
 
         EI_computed = acq.gp_EI_computation(gp, X_)
         next_to_evaluate = acq.acquisition_maxEI_brute(gp, X_)
@@ -74,10 +74,10 @@ def EGO_brute(gp_, true_function, X_, niterations=10, plot=True):
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print 'Best value found so far ' + str(gp.X_train_[gp.y_train_.argmin()])
+        print('Best value found so far: {}'.format(str(gp.X_train_[gp.y_train_.argmin()])))
 
-    print '  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
     return gp
 
 
@@ -105,12 +105,12 @@ def EGO_analytical(gp_, true_function, X_ = None, niterations = 10,
     gp = copy.copy(gp_)
     i = 0
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
         if X_ is not None:
             EI_computed = acq.gp_EI_computation(gp, X_)
 
         next_to_evaluate = acq.acquisition_maxEI_analytical_gradientfree(gp, nrestart, bounds)
-        print '  Evaluated: ' + str(next_to_evaluate)
+        print('  Evaluated: ' + str(next_to_evaluate))
         value_evaluated = true_function(next_to_evaluate)
 
         if plot:
@@ -130,10 +130,10 @@ def EGO_analytical(gp_, true_function, X_ = None, niterations = 10,
         gp.fit(X, y)
         i += 1
 
-        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+        print('  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()]))
 
-    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('---  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
     return gp
 
 
@@ -161,12 +161,12 @@ def EGO_LCB(gp_, true_function, kappa, X_ = None, niterations = 10,
     gp = copy.copy(gp_)
     i = 0
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
         if X_ is not None:
             LCB_computed = acq.gp_LCB(gp, X_, kappa)
 
         next_to_evaluate = acq.acquisition_LCB(gp, kappa, nrestart, bounds)
-        print '   Evaluated: ' + str(next_to_evaluate)
+        print('   Evaluated: ' + str(next_to_evaluate))
         value_evaluated = true_function(next_to_evaluate)
 
         if plot:
@@ -185,10 +185,10 @@ def EGO_LCB(gp_, true_function, kappa, X_ = None, niterations = 10,
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+        print('  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()]))
 
-    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('---  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
     return gp
 
 
@@ -219,7 +219,7 @@ def qEI_brute(gp_, true_function, X_=np.linspace(0, 1, 200), q=3,
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+        print('  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()]))
 
         plt.show()
     return gp
@@ -248,7 +248,7 @@ def IAGO_brute(gp_, true_function, candidates, X_, niterations=10, M=10,
     gp = copy.copy(gp_)
     i = 0
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
 
         cond_entropy = acq.conditional_entropy(gp, candidates, X_, M, nsamples)
         next_to_evaluate = candidates[cond_entropy.argmin()]
@@ -269,11 +269,10 @@ def IAGO_brute(gp_, true_function, candidates, X_, niterations=10, M=10,
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print 'Best value found so far ' +\
-            str(gp.X_train_[gp.y_train_.argmin()])
+        print('Best value found so far ' + str(gp.X_train_[gp.y_train_.argmin()]))
 
-    print '  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
     return gp
 
 
@@ -303,9 +302,10 @@ def exploEGO(gp_, true_function, idx_U, X_ = None, niterations = 10,
     gp = copy.copy(gp_)
     i = 0
     if idx_U is None:
-        print 'No index for exploration, classical EGO performed'
+        print('No index for exploration, classical EGO performed')
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
+
 
         next_to_evaluate, distance = acq.acquisition_exploEI_analytical(gp, nrestart, bounds, idx_U)
         value_evaluated = true_function(next_to_evaluate)
@@ -328,11 +328,11 @@ def exploEGO(gp_, true_function, idx_U, X_ = None, niterations = 10,
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
-        print '  Maximum distance: ' + str(distance)
+        print('  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()]))
+        print('  Maximum distance: ' + str(distance))
 
-    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('---  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
     return gp
 
 
@@ -343,7 +343,7 @@ def eval_array_separate_variables(gp, value_to_change, value_to_fix, idx_to_fix)
     idx_to_change = filter(lambda i: i in range(ndim) and i not in idx_to_fix, range(ndim))
 
     if len(idx_to_change) + len(idx_to_fix) != ndim:
-        print 'Dimensions do not match!'
+        print('Dimensions do not match!')
     # rep_fixed = np.tile(value_to_fix, npoints).reshape(npoints, len(idx_to_fix))
     eval_array = np.zeros([npoints, ndim])
     eval_array[:, idx_to_change] = value_to_change
@@ -366,7 +366,7 @@ def slicer_gp_predict(gp, value_to_fix, idx_to_fix, return_std=True):
 def find_minimum_sliced(gp, value_to_fix, idx_to_fix, bounds = None,
                         nrestart = 10, coefficient=1.0):
     """
-    For a value 'value_to_fix', that is the argument indexed by 'idx_to_fix', 
+    For a value 'value_to_fix', that is the argument indexed by 'idx_to_fix',
     Finds minimum of the prediction of the gaussian process when the other
     arguments vary
     """
@@ -445,14 +445,14 @@ def PI_alpha_allspace(gp, alpha, idx_to_explore, X_to_minimize,
 def PI_alpha_check_tol(gp, idx_to_explore, X_to_minimize, X_to_explore, ptol = 1.0,
                        bounds = None, nrestart = 10, delta_alpha = 0.01, alpha_start = 1.0,
                        PI = True):
-    """ Compute the value of alpha, such that the gp prediction is below alpha*minimum 
-        with probability ptol
+    """ Compute the value of alpha, such that the gp prediction is below
+    alpha*minimum  with probability ptol
     """
 
 
 
     if ptol > 1.0:
-        print 'No solution for ptol > 1, set at 1.0'
+        print('No solution for ptol > 1, set at 1.0')
         ptol = 1.0
     alpha = alpha_start
     prob_alpha_min = PI_alpha_allspace(gp=gp, alpha=alpha,
@@ -467,7 +467,7 @@ def PI_alpha_check_tol(gp, idx_to_explore, X_to_minimize, X_to_explore, ptol = 1
                                            X_to_minimize=X_to_minimize,
                                            X_to_explore=X_to_explore,
                                            bounds=bounds, nrestart=nrestart, PI=PI)
-        print 'alpha = ' + str(alpha) + ', max prob = ' + str(max(prob_alpha_min))
+        print('alpha = ' + str(alpha) + ', max prob = ' + str(max(prob_alpha_min)))
 
     return alpha, X_to_minimize[prob_alpha_min.argmax()]
 
@@ -485,7 +485,7 @@ def PI_alpha_check_tol_dichotomy(gp, idx_to_explore, X_to_minimize, X_to_explore
     #     print 'alpha < maximum/minimum = ', maxi.fun / mini.fun
 
     if ptol > 1.0:
-        print 'No solution for ptol > 1, set at 1.0'
+        print('No solution for ptol > 1, set at 1.0')
         ptol = 1.0
     prob_alpha_min_low = PI_alpha_allspace(gp=gp, alpha=alpha_low,
                                            idx_to_explore=idx_to_explore,
@@ -521,8 +521,9 @@ def PI_alpha_check_tol_dichotomy(gp, idx_to_explore, X_to_minimize, X_to_explore
                                                   X_to_minimize=X_to_minimize,
                                                   X_to_explore=X_to_explore,
                                                   bounds = bounds, nrestart = nrestart)
-        print 'alpha = ' + str(alpha_low) + ', ' + str(alpha_up) \
-            + ', max prob = ' + str(max(prob_alpha_min_low)) + ', ' + str(max(prob_alpha_min_up))
+        print('alpha = ' + str(alpha_low) + ', ' + str(alpha_up) +
+              ', max prob = ' + str(max(prob_alpha_min_low)) + ', ' +
+              str(max(prob_alpha_min_up)))
         nite += 1
     return (alpha_low + alpha_up) / 2.0, X_to_minimize[prob_alpha_min.argmax()]
 
@@ -738,10 +739,10 @@ def EI_VAR(gp_, true_function, idx_U, X_ = None, niterations = 10,
     gp = copy.copy(gp_)
     i = 0
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
         next_to_evaluate, maxEI = acquisition_EI_VAR(gp, idx_U, nrestart, bounds, nsamples)
-        print '  maxEI = ' + str(maxEI)
-        print '  next to evaluate = ' + str(next_to_evaluate)
+        print('  maxEI = ' + str(maxEI))
+        print('  next to evaluate = ' + str(next_to_evaluate))
         value_evaluated = true_function(next_to_evaluate)
 
         if plot:
@@ -762,15 +763,15 @@ def EI_VAR(gp_, true_function, idx_U, X_ = None, niterations = 10,
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+        print('  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()]))
 
-    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('---  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
 
     final_dec = final_decision_quantile_EIVAR(gp, idx_U, nrestart=500,
                                               bounds=bounds, nsamples=nsamples)
 
-    print '--- Final decision' + str(final_dec)
+    print('--- Final decision' + str(final_dec))
     return gp, final_dec
 
 
@@ -802,7 +803,7 @@ def EI_MC_initial_design(true_function, idx_K, idx_U, ninitial = None,
                                                               iterations=100),
                                                     bounds[idx_K, :])
     else:
-        print 'Only available for dimK = 1'
+        print('Only available for dimK = 1')
         LHS_K = inv_transformation_variable_to_unit(np.linspace(0, 1, ninitial),
                                                     bounds[idx_K, :])
 
@@ -843,10 +844,10 @@ def EI_MC(gp_, true_function, idx_U, X_ = None, niterations = 10,
     gp = copy.copy(gp_)
     i = 0
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
         next_to_evaluate, maxEI = acquisition_EI_VAR(gp, idx_U, nrestart, bounds, nsamples)
-        print '  maxEI = ' + str(maxEI)
-        print '  next to evaluate = ' + str(next_to_evaluate)
+        print('  maxEI = ' + str(maxEI))
+        print('  next to evaluate = ' + str(next_to_evaluate))
         value_evaluated = true_function(next_to_evaluate)
 
         if plot:
@@ -867,15 +868,15 @@ def EI_MC(gp_, true_function, idx_U, X_ = None, niterations = 10,
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+        print('  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()]))
 
-    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('---  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
 
     final_dec = final_decision_quantile_EIVAR(gp, idx_U, nrestart=500,
                                               bounds=bounds, nsamples=nsamples)
 
-    print '--- Final decision' + str(final_dec)
+    print('--- Final decision' + str(final_dec))
     return gp, final_dec
 
 
@@ -898,7 +899,7 @@ def gp_worst_case_fixedgrid(gp, idx_K, K_array, bounds=None, full_output=False):
                                           bounds=bounds_U,
                                           nrestart=100,
                                           coefficient=-1.0)  # Find maximum on the slice
-    print current_minimum
+    print(current_minimum)
     if full_output:
         worst_perf[0] = -current_minimum.fun
     for index, k in enumerate(K_array[1:]):
@@ -907,7 +908,7 @@ def gp_worst_case_fixedgrid(gp, idx_K, K_array, bounds=None, full_output=False):
                                            bounds=bounds_U,
                                            nrestart=100,
                                            coefficient=-1.0)  # Find maximum on the slice
-        print -minimum_at_k.fun, -current_minimum.fun
+        print((-minimum_at_k.fun, -current_minimum.fun))
         if full_output:
             worst_perf[index + 1] = -minimum_at_k.fun
         if -minimum_at_k.fun < -current_minimum.fun:
@@ -920,16 +921,16 @@ def gp_worst_case_fixedgrid(gp, idx_K, K_array, bounds=None, full_output=False):
 
 
 # --------------------------------------------------------------------------
-
 def PEI_threshold(gp, u, idxU, boundsK):
     min_pred = find_minimum_sliced(gp, u, idxU, bounds=[boundsK.T]).fun
     # return min_pred
     return max([min_pred, gp.y_train_.min()])
 
 
+# --------------------------------------------------------------------------
 def PEI_comb(gp, comb, idxU, bounds):
     _, ndim = gp.X_train_.shape
-    N = comb.shape[0]
+    N = len(comb)
     idxK = filter(lambda i: i in range(ndim) and i not in idxU, range(ndim))
     vals = np.empty(N)
     for i, ku in enumerate(comb):
@@ -940,6 +941,7 @@ def PEI_comb(gp, comb, idxU, bounds):
     return vals
 
 
+# --------------------------------------------------------------------------
 def profilePEI(gp, u, idxU, boundsK):
     thres = PEI_threshold(gp, u, idxU, boundsK)
     fun_ufixed = slicer_gp_predict(gp, u, idxU, return_std=True)
@@ -957,7 +959,7 @@ def profilePEI(gp, u, idxU, boundsK):
     return current_max.x
 
 
-
+# --------------------------------------------------------------------------
 def acquisition_PEI_joint(gp, nrestart, idxU, bounds):
     optim_number = 1
     rng = np.random.RandomState()
@@ -979,10 +981,9 @@ def acquisition_PEI_joint(gp, nrestart, idxU, bounds):
     return maxPEI.x
 
 
-
-
-
-def PEI_algo(gp_, true_function, idx_U, X_ = None, niterations = 10,
+# --------------------------------------------------------------------------
+def PEI_algo(gp_, true_function, idx_U, X_=None,
+             niterations = 10,
              plot = False, nrestart = 20, bounds = None):
     """
     exploEGO performed with optimization on the EI
@@ -1007,9 +1008,10 @@ def PEI_algo(gp_, true_function, idx_U, X_ = None, niterations = 10,
     gp = copy.copy(gp_)
     i = 0
     while i < niterations:
-        print 'Iteration ' + str(i + 1) + ' of ' + str(niterations)
+        print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
 
         next_to_evaluate = acquisition_PEI_joint(gp, nrestart, idx_U, bounds)
+        print('next: {}'.format(next_to_evaluate))
         value_evaluated = true_function(next_to_evaluate)
 
         if plot:
@@ -1030,15 +1032,61 @@ def PEI_algo(gp_, true_function, idx_U, X_ = None, niterations = 10,
         y = np.append(gp.y_train_, value_evaluated)
         gp.fit(X, y)
         i += 1
-        print '  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()])
+        print('  Best value yet ' + str(gp.X_train_[gp.y_train_.argmin()]))
 
-    print '---  Best value found after ' + str(niterations) + ' iterations: ' \
-        + str(gp.X_train_[gp.y_train_.argmin()])
+    print('---  Best value found after ' + str(niterations) + ' iterations: ' +
+          str(gp.X_train_[gp.y_train_.argmin()]))
     return gp
 
 
 # --------------------------------------------------------------------------
+def coverage_probability(gp, threshold, points):
+    mean, std = gp.predict(points, return_std=True)
+    return scipy.stats.norm.cdf((threshold - mean) / std, loc=0, scale=1)
 
+
+# --------------------------------------------------------------------------
+def alpha_set_quantile(gp, threshold, q, points):
+    mean, std = gp.predict(points, return_std=True)
+    return mean + scipy.stats.norm.ppf(q) * std <= threshold
+
+
+# --------------------------------------------------------------------------
+def Vorobev_quantile(gp, threshold, qstart, points, tol=1e-5):
+    target = np.mean(coverage_probability(gp, threshold, points))
+    q = qstart
+    ql, qu = 0.0, 1.0
+    proposition = np.mean(alpha_set_quantile(gp, threshold, q, points))
+    nit = 0
+    while (np.abs(proposition - target) > tol and (nit < 50)):
+        print(nit, np.abs(proposition - target), q)
+        if proposition > target:
+            qu = q
+            q = (ql + q) / 2.0
+            proposition = np.mean(alpha_set_quantile(gp, threshold, q, points))
+        else:
+            ql = q
+            q = (qu + q) / 2.0
+            proposition = np.mean(alpha_set_quantile(gp, threshold, q, points))
+        nit += 1
+    return q
+
+
+# --------------------------------------------------------------------------
+def Vorobev_mean(gp, threshold, qstart, points, tol=1e-5):
+    """ Returns indicator function of Vorobev quantile applied to points
+    """
+    astar = Vorobev_quantile(gp, threshold, qstart, points, tol)
+    return alpha_set_quantile(gp, threshold, astar, points)
+
+
+# --------------------------------------------------------------------------
+def Vorobev_deviation(gp, coverage, Vorobev_mean):
+    return (np.sum(coverage[Vorobev_mean]) +
+            np.sum((1.0 - coverage)[~Vorobev_mean])) / len(coverage)
+
+
+# --------------------------------------------------------------------------
 if __name__ == '__main__':
     rng = np.random.RandomState()
     X = rng.uniform(0, 1, 5) + [0.0, 1.0, 2.0, 3.0, 4.0]
@@ -1171,6 +1219,9 @@ if __name__ == '__main__':
     xx, yy = np.meshgrid(X_, X_, indexing = 'ij')
     all_combinations = np.array([xx, yy]).T.reshape(-1, 2, order = 'F')
     EI_criterion = acq.gp_EI_computation(gp, all_combinations)
+    T = 1.5
+    bplt.plot_2d_strategy(gp, all_combinations, function_2d, Vorobev_mean(gp, T, 0.5, all_combinations))
+
     # cond_entropy_2d = acq.conditional_entropy(gp, all_combinations,
     #                                           all_combinations, M=5,
     #                                           nsamples=100)
@@ -1185,14 +1236,17 @@ if __name__ == '__main__':
     plt.show()
 
     PEI_joint = PEI_algo(gp, function_2d,
-                         idx_U = [1], nrestart = 10,
-                         X_ = all_combinations,
-                         niterations = 100, plot = False, bounds=np.asarray(bounds))
+                         idx_U=[1],
+                         nrestart=10,
+                         X_=all_combinations,
+                         niterations=3,
+                         plot=False,
+                         bounds=np.asarray(bounds))
     PEI_crit = PEI_comb(PEI_joint, all_combinations, [1], np.asarray(bounds))
     bplt.plot_2d_strategy(PEI_joint, all_combinations, function_2d,
                           PEI_crit, criterion_plottitle = 'PEI',
                           show = True, cond_min = True)
-    
+
 
     # EGO brute ------------------------------
     gp_brute = EGO_brute(gp, function_2d, all_combinations, niterations=100, plot=False)
@@ -1245,7 +1299,7 @@ if __name__ == '__main__':
     alpha_99, k_check_99 = PI_alpha_check_tol(gp, [idx], X_, X_, delta_alpha = 0.05, ptol = 0.99)
     alpha_95, k_check_95 = PI_alpha_check_tol(gp, [idx], X_, X_, delta_alpha = 0.05, ptol = 0.95)
     alpha_90, k_check_90 = PI_alpha_check_tol(gp, [idx], X_, X_, delta_alpha = 0.05, ptol = 0.9)
-    print alpha_1, k_check_1
+    print(alpha_1, k_check_1)
     print alpha_99, k_check_99
     print alpha_95, k_check_95
     print alpha_90, k_check_90
