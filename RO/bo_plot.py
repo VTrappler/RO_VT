@@ -1,7 +1,5 @@
-# coding: utf-8
 #!/usr/bin/env python
-
-# from sklearn.gaussian_process import GaussianProcessRegressor
+# coding: utf-8
 
 from matplotlib import pyplot as plt
 import matplotlib.tri as tri
@@ -9,7 +7,8 @@ import numpy as np
 
 
 # ------------------------------------------------------------------------------
-def plot_mean_std(X_, y_mean, y_std, show=True, label = None, color = 'k', linewidth = 3):
+def plot_mean_std(X_, y_mean, y_std, show=True, label=None, color='k', linewidth=3):
+
     plt.plot(X_, y_mean, color=color, linewidth=linewidth, label = label)
     plt.fill_between(X_, y_mean - y_std, y_mean + y_std,
                      alpha=0.1, color=color, linewidth = 0.0)
@@ -72,7 +71,8 @@ def plot_2d_strategy(gp, X_, function, criterion, next_to_evaluate = None,
 
     sqn = int(np.sqrt(X_.shape[0]))
     vector_to_mesh = X_[:sqn, 1]
-    xmesh, ymesh = np.meshgrid(vector_to_mesh, vector_to_mesh, indexing = 'ij')  # Getting back the meshgrid from X_
+    xmesh, ymesh = np.meshgrid(vector_to_mesh, vector_to_mesh,
+                               indexing = 'ij')  # Getting back the meshgrid from X_
     y_pred_2d, y_std_2d = np.asarray(gp.predict(X_, return_std = True))
     y_pred_2d = y_pred_2d.reshape(sqn, sqn)
     y_std_2d = y_std_2d.reshape(sqn, sqn)
