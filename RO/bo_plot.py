@@ -115,7 +115,7 @@ def plot_2d_strategy(gp, X_, function, criterion, next_to_evaluate = None,
 
 
 
-def plot2d_gp(gp, NpointsX, NpointsY=None, plot_evals=True):
+def plot2d_gp(gp, NpointsX, NpointsY=None, plot_evals=True, fill=True, contourlevels=20):
     """
     plot triangular interpolation of the gaussian process based on the training data
     """
@@ -128,7 +128,10 @@ def plot2d_gp(gp, NpointsX, NpointsY=None, plot_evals=True):
     Y_plt = np.linspace(Y.min(), Y.max(), NpointsY)
     X_mg, Y_mg = np.meshgrid(X_plt, Y_plt)
     interpolation = interpolator(X_mg, Y_mg)
-    plt.contourf(X_mg, Y_mg, interpolation)
+    if fill:
+        plt.contourf(X_mg, Y_mg, interpolation, contourlevels)
+    else:
+        plt.contour(X_mg, Y_mg, interpolation, contourlevels)
 
     if plot_evals:
         plt.plot(X, Y, '.r', markersize=0.8)

@@ -229,13 +229,15 @@ def quantization_operator(y):
 
 
 # -----------------------------------------------------------------------------
-def gp_fitted_candidate(gp, xcandidate, yvalue):
+def gp_fitted_candidate(gp, xcandidate, yvalue, optim_covariance=True):
     """
     Add the pair (xcandidate, yvalue) to the experimental design, and fits gp
     """
     gp_candidate_added = copy.copy(gp)
     Xtrain = gp_candidate_added.X_train_
     ytrain = gp_candidate_added.y_train_
+    if not optim_covariance:
+        gp_candidate_added.optimizer = None
     new_design = np.vstack([Xtrain, xcandidate])
     new_response = np.append(ytrain, yvalue)
     gp_candidate_added.fit(new_design, new_response)
@@ -279,19 +281,20 @@ def conditional_globalmin_brute(gp, X_, nsamples=1000):
 
 
 # -----------------------------------------------------------------------------
-def conditional_entropy_value_added(gp, xcandidate, yvalue, X_, nsamples):
+def conditional_entropy_value_added(gp, xcandidate, yvalue, X_, nsamples, optim):
     """
     Conditional entropy given the observations where (xcandidate, yvalue) has
     been added
     """
-    gp_candidate_added = gp_fitted_candidate(gp, xcandidate, yvalue)
+    gp_candidate_added = gp_fitted_candidate(gp, xcandidate, yvalue, optim)
     Xstar, __ = conditional_globalmin_brute(gp_candidate_added, X_, nsamples)
     vals, count = np.unique(Xstar, axis=0, return_counts=True)
     return scipy.stats.entropy(count)
 
 
 # -----------------------------------------------------------------------------
-def conditional_entropy(gp, xcandidate, X_, M, nsamples):
+def conditional_entropy(gp, xcandidate, X_, M, nsamples,
+                        iterative_optim = False):
     npoints = len(xcandidate)
     # nfeatures = gp.X_train_.shape[1]
     entropy_out = np.empty(npoints)
@@ -302,6 +305,7 @@ def conditional_entropy(gp, xcandidate, X_, M, nsamples):
         for j, yval in enumerate(y_values):
             # print '  ', yval
             entropies[j] += conditional_entropy_value_added(gp, xc,
-                                                            yval, X_, nsamples)
+                                                            yval, X_, nsamples,
+                                                            iterative_optim)
         entropy_out[i] = entropies.mean()
     return entropy_out
