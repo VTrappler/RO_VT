@@ -1,8 +1,7 @@
-from __future__ import print_function
-
 #!/usr/bin/env python
 # coding: utf-8
 
+from __future__ import unicode_literals, print_function, with_statement
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from matplotlib import pyplot as plt
@@ -17,6 +16,12 @@ import warnings
 
 import RO.acquisition_function as acq
 import RO.bo_plot as bplt
+
+import matplotlib as mpl
+from matplotlib import cm
+plt.style.use('seaborn')
+mpl.rcParams['image.cmap'] = u'viridis'
+plt.rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 
 
 # ------------------------------------------------------------------------------
@@ -126,6 +131,7 @@ def template(gp_, true_function, acquisition_fun, criterion_fun, prefix, X_=None
         while i < niterations:
             print('Iteration {} of {}'.format(str(i + 1), str(niterations)))
             if X_ is not None:
+                print('Computation of criterion')
                 criterion = criterion_fun(gp, X_)
 
             next_to_evaluate = acquisition_fun(gp)
@@ -140,7 +146,7 @@ def template(gp_, true_function, acquisition_fun, criterion_fun, prefix, X_=None
 
                 elif X_.ndim == 2:
                     bplt.plot_2d_strategy(gp, X_, true_function,
-                                          criterion = criterion,
+                                          criterion=criterion,
                                           next_to_evaluate=next_to_evaluate,
                                           show=False,
                                           criterion_plottitle=prefix)
@@ -1416,7 +1422,7 @@ def estimate_alpha_p(gp, grid, p, idxU, boundsK, alpha_lb, alpha_ub):
     prob = 0
     while (al_ub - al_lb) > 1e-7 and np.abs(prob - p) > 1e-7:
         prob = pi_alpha(mean_cov_list_of_tuples, al).reshape(ngrid, ngrid).mean(1).max()
-        print(al, prob)
+        print('{}, {}\r'.format(al, prob))
         if prob < p:
             (al_lb, al) = (al, (al + al_ub) / 2.0)
         else:
@@ -1425,6 +1431,7 @@ def estimate_alpha_p(gp, grid, p, idxU, boundsK, alpha_lb, alpha_ub):
     return 0.5 * (al_lb + al_ub)
 
 
+# --------------------------------------------------------------------------
 def estimate_alpha_quantiles(gp, grid, p, idxU, boundsK):
     """Estimate alpha solely on the prediction of the gp
     Plug-in approach
@@ -1437,14 +1444,15 @@ def estimate_alpha_quantiles(gp, grid, p, idxU, boundsK):
     :returns:
     :rtype:
     """
+    print('Computation of mdelta in estimate_alpha_quantiles')
     mdelta = [tu[0] for tu in mean_covariance_alpha_vector(gp, grid, idxU, boundsK)]
 
     def delta(alpha):
         return [mms[0] - alpha * mms[1] for mms in mdelta]
 
     ratio = np.asarray([mms[0] / mms[1] for mms in mdelta])
-
-    return np.quantile(ratio.reshape(25, 25), p, axis=1).min()
+    nk, nu = 100, 100
+    return np.quantile(ratio.reshape(nk, nu), p, axis=0).min()
 
 
 # --------------------------------------------------------------------------
@@ -1469,7 +1477,7 @@ def m_s_delta(gp, k, u, alpha, idxU, boundsK):
     sig_D = one_alpha.dot(co.dot(one_alpha.T))
     return mu_D, sig_D
 
-
+# --------------------------------------------------------------------------
 def mu_sigma_delta(gp, vec_ku, alpha, idxU, boundsK):
     """ Computes the mean and variance of the gaussian process constructed upon
        D ={Y - alpha Y*}, with Y* ~ N(m*,s2*) and m*(u) = min_k m(k,u)
@@ -1495,7 +1503,7 @@ def mu_sigma_delta(gp, vec_ku, alpha, idxU, boundsK):
                                        idxU, boundsK)
     return md, np.sqrt(sdsquare)
 
-
+# --------------------------------------------------------------------------
 def sample_from_criterion(Nsamples, criterion, bounds, Ncandidates):
     """ Rejection method to generate Nsamples according to a probability distribution
         proportional to the criterion
@@ -1516,7 +1524,7 @@ def sample_from_criterion(Nsamples, criterion, bounds, Ncandidates):
         samples = samples[:Nsamples, :]
     return samples
 
-
+# --------------------------------------------------------------------------
 def cluster_and_find_closest(Nclusters, samples):
     """From the samples, classify them in Nclusters, and returns the closest sample from
     the cluster centroids
@@ -1554,7 +1562,7 @@ def add_points_to_design(gp, points_to_add, evaluated_points, optimize_cov=False
     gpp.fit(X, y)
     return gpp
 
-
+# --------------------------------------------------------------------------
 def integrated_variance(gp, integration_points, alpha=1.8):
     """Computes the IMSE (Integrated Mean Square Error) of the gp (eventually with
     the relaxation alpha). Computed by summing the prediction variance at the integrated points
@@ -1573,6 +1581,7 @@ def integrated_variance(gp, integration_points, alpha=1.8):
     return np.mean(s**2)
 
 
+# --------------------------------------------------------------------------
 def augmented_IMSE(gp, candidate_points, integration_points, scenarios=None, alpha=1.8):
     """IMSE of the gaussian process when a candidate point is added
     Adding a relaxation is possible when setting alpha to a float >= 1.0
@@ -1612,7 +1621,7 @@ def augmented_IMSE(gp, candidate_points, integration_points, scenarios=None, alp
 # IMSE = augmented_IMSE(gp, all_combinations, all_combinations, alpha=None)
 
 
-
+# --------------------------------------------------------------------------
 def acquisition_vpi(gp, alpha, nrestart=3, bounds=np.asarray([[0, 1], [0, 1]])):
     """Maximizes the variance of the probability of coverage of the alpha acceptable
     region
@@ -1650,6 +1659,7 @@ xx, yy = np.meshgrid(X_, X_, indexing = 'ij')
 all_combinations = np.array([xx, yy]).T.reshape(-1, 2, order = 'F')
 
 
+# --------------------------------------------------------------------------
 def acquisition_IMSE(gp, alpha, nrestart=3,
                      integration_points=all_combinations,
                      bounds=np.asarray([[0, 1],
@@ -1685,7 +1695,7 @@ def acquisition_IMSE(gp, alpha, nrestart=3,
         optim_number += 1
     return minIMSE.x
 
-
+# --------------------------------------------------------------------------
 def acquisition_IMSE_at_k(gp, kfix, alpha=None, nrestart=3,
                           bounds=np.asarray([[0, 1]])):
     """Minimizes the augmented IMSE along the axis k = kfix
@@ -1720,6 +1730,33 @@ def acquisition_IMSE_at_k(gp, kfix, alpha=None, nrestart=3,
     return minIMSE.x
 
 
+# --------------------------------------------------------------------------
+def prediction_variance(gp, ku, alpha):
+    m, s = mu_sigma_delta(gp, np.atleast_2d(ku), alpha, [1], np.asarray([0, 1]))
+    return s**2
+
+
+# --------------------------------------------------------------------------
+def acquisition_minprediction_variance(gp, kfix, alpha=None, nrestart=5,
+                                       bounds=np.asarray([[0, 1]])):
+    def fun_to_minimize(u):
+        k = kfix * np.ones_like(u)
+        vec_eval = np.vstack([k, u]).T
+        return - prediction_variance(gp, vec_eval, alpha)
+    
+    optim_number = 0
+    x0 = np.asarray([rng.uniform(bds[0], bds[1], 1) for bds in bounds]).squeeze()
+
+    minIMSE = scipy.optimize.minimize(fun_to_minimize, x0=x0, bounds=bounds)
+
+    while optim_number < nrestart:
+        x0 = [rng.uniform(bds[0], bds[1], 1) for bds in bounds]
+        mintemp = scipy.optimize.minimize(fun_to_minimize, x0=x0, bounds=bounds)
+        if mintemp.fun < minIMSE.fun:
+            minIMSE = mintemp
+        optim_number += 1
+    return minIMSE.x
+
 # -------------------------------------------------------------------------
 if __name__ == '__main__':
     # Setting of the functions and initial design -------------------------
@@ -1729,7 +1766,8 @@ if __name__ == '__main__':
     ndim = 2
     bounds = np.asarray([[0, 1], [0, 1]])
     # initial_design_2d = np.array([[1,1],[2,2],[3,3],[4,4], [5,2], [1,4],[0,0],[5,5], [4,1]])/5.0
-    initial_design_2d = pyDOE.lhs(n=2, samples=30,
+    initial_design_2d = pyDOE.lhs(n=2,
+                                  samples=30,
                                   criterion='maximin',
                                   iterations=50)
     response_2d = function_2d(initial_design_2d)
@@ -1740,38 +1778,80 @@ if __name__ == '__main__':
     gp.fit(initial_design_2d, response_2d)
 
     # Builds a regular grid ---------------------------------------------
-    ngrid = 25
-    X_ = np.linspace(0, 1, ngrid)
-    xx, yy = np.meshgrid(X_, X_, indexing = 'ij')
+    ngrid = 100
+    X_, Y_ = np.linspace(0, 1, ngrid), np.linspace(0, 1, ngrid)
+    ngrid_big, ngrid_big_2 = 500, 1000
+    X_l, X_l2 = np.linspace(0, 1, ngrid_big), np.linspace(0, 1, ngrid_big_2)
+    mg_b1, mg_b2 = np.meshgrid(X_l, X_l2, indexing='ij')
+    big_comb = np.array([mg_b1, mg_b2]).T.reshape(-1, 2, order='F')
+    xx, yy = np.meshgrid(X_, Y_, indexing = 'ij')
     all_combinations = np.array([xx, yy]).T.reshape(-1, 2, order = 'F')
 
     EI_criterion = acq.gp_EI_computation(gp, all_combinations)
     T = 1.5
+    plt.figure()
     bplt.plot_2d_strategy(gp, all_combinations, function_2d,
                           Vorobev_mean(gp, T, 0.5, all_combinations))
 
-    aa = gp.sample_y(all_combinations, n_samples=9)
-    p = [0.95, .99, 1.0]
-    Nsamples = 1000
-    alpha_p_samples = np.empty((Nsamples, 3))
-    # for j, aa in enumerate(sample_y_modified(gp, all_combinations, Nsamples)):
-    #     print '{}\r'.format(j),
-    #     curr = aa.reshape(ngrid, ngrid)
-    #     Jstar = np.asarray([curr[curr.argmin(0)[i], i] for i in xrange(len(X_))])
-    #     rho = (curr / Jstar[np.newaxis, :])
-    #     alpha_p = np.quantile(rho, p, axis=0).min(1)
-    #     alpha_p_samples[j, :] = alpha_p
 
-    nan = alpha_p_samples[:, 0] <= 1.0
-    alpha_p_samples = alpha_p_samples[~nan, :]
-    alpha_p_samples.mean(0)
-    
-    plt.hist(alpha_p_samples[:, 0])
-    plt.hist(alpha_p_samples[:, 1])
-    plt.hist(alpha_p_samples[:, 2])
+    p = .99
+    out_t = function_2d(big_comb).reshape(ngrid_big, ngrid_big_2)
+    kstar_t = out_t.argmin(0)
+    Jstar_t = out_t.min(0)
+    rho_t = (out_t / Jstar_t[np.newaxis, :])
+    alpha_p_t = np.quantile(rho_t, p, axis=1)
+    plt.subplot(2, 1, 1)
+    plt.contourf(mg_b1, mg_b2, out_t)
+    plt.plot(X_l[kstar_t], X_l2, 'o', color='white')
+    plt.subplot(2, 1, 2)
+    plt.plot(X_l, alpha_p_t)
+    # plt.plot(X_l2, Jstar_t)     #
+    plt.xlim((0, 1))
+    plt.title(alpha_p_t.min())
     plt.show()
 
-    plt.style.use('ggplot')
+
+    # aa = gp.sample_y(all_combinations, n_samples=9)
+    from RO.gp_samples_generator import sample_y_modified
+    p = .99
+    Nsamples = 1000
+    alpha_p_samples = np.empty((Nsamples, len(X_)))
+    for j, aa in enumerate(sample_y_modified(gp, all_combinations, Nsamples)):
+        print '{}\r'.format(j, Nsamples),
+        curr = aa.reshape(ngrid, 2 * ngrid)
+        Jstar = curr.min(0)
+        rho = (curr / Jstar[np.newaxis, :])
+        alpha_p = np.quantile(rho, p, axis=1)
+        alpha_p_samples[j, :] = alpha_p
+
+    # nan = alpha_p_samples[:, 0] <= 1.0
+    # alpha_p_samples = alpha_p_samples[~nan, :]
+    # alpha_p_samples.mean(0)
+
+    # plt.hist(alpha_p_samples[:, 0])
+    # plt.hist(alpha_p_samples[:, 1])
+    # plt.hist(alpha_p_samples[:, 2])
+    # plt.show()
+    plt.subplot(2, 2, (1, 2))
+    plt.contourf(mg_b1, mg_b2, out_t)
+    plt.subplot(2, 2, 3)
+    for al in alpha_p_samples:
+        plt.plot(X_, al, color='k', alpha=0.02)
+    plt.plot(X_, alpha_p_samples.mean(0), color='b', lw=2, label='mean')
+    plt.plot(X_, np.quantile(alpha_p_samples, 0.05, axis=0),
+             color='w', lw=2, label='5\% quantiles')
+    plt.plot(X_, np.quantile(alpha_p_samples, 0.95, axis=0),
+             color='w', lw=2, label='95\% quantiles')
+    plt.plot(X_l2, alpha_p_t, color='g', lw=3, label='true')
+    # plt.plot(X_l, alpha_p_plugin, color='r', lw=3, label='predicted')
+    # plt.ylim([1.0, 5.0])
+    plt.legend()
+    plt.subplot(2, 2, 4)
+    plt.plot(X_, alpha_p_samples.var(0), color='r')
+    plt.suptitle((r'Estimation of the quantiles of $Y(k,u)/Y^*(u)$'
+                 r' for generated samples $Y_i$ of $J$ via GP'))
+    plt.show()
+
     plt.subplot(2, 2, 1)
     plt.plot(Js.mean(0), X_)
     plt.subplot(2, 2, 2)
@@ -1779,6 +1859,58 @@ if __name__ == '__main__':
     plt.subplot(2, 2, 4)
     plt.plot(X_, Js.mean(1))
     plt.show()
+
+    def estimate_alpha_samples(gp, X, k, p, idxU, boundsU,
+                               Nsamples=1000, method='LB',
+                               fig_name=None):
+        """Estimation of alpha_p using samples of the GP
+
+        :param gp: GaussianProcessRegressor
+        :param X: grid
+        :param p: probability
+        :param idxU: index of U
+        :param boundsU: bounds of U
+        :returns:
+        :rtype:
+
+        """
+        from RO.gp_samples_generator import sample_y_modified
+        
+        alpha_p_samples = np.empty((Nsamples, len(k)))
+        nk, nu = len(k), int(len(all_combinations) / len(k))
+        for j, aa in enumerate(sample_y_modified(gp, all_combinations, Nsamples)):
+            print '{}\r'.format(j),
+            curr = aa.reshape(nk, nu)
+            Jstar = curr.min(0)
+            rho = (curr / Jstar[np.newaxis, :])
+            alpha_p = np.quantile(rho, p, axis=1)
+            alpha_p_samples[j, :] = alpha_p
+        if fig_name is not None:
+
+            out_plugin = gp.predict(X).reshape(nk, nu)
+            Jstar_plugin = out_plugin.min(0)
+            rho_plugin = (out_plugin / Jstar_plugin[np.newaxis, :])
+            alpha_p_plugin = np.quantile(rho_plugin, p, axis=1)
+            for al in alpha_p_samples:
+                plt.plot(X_, al, color='k', alpha=0.02)
+            plt.plot(X_, alpha_p_samples.mean(0), color='b', lw=2, label='mean')
+            plt.plot(X_, np.quantile(alpha_p_samples, 0.05, axis=0),
+                     color='w', lw=2, label=r'5\% quantiles')
+            plt.plot(X_, np.quantile(alpha_p_samples, 0.95, axis=0),
+                     color='w', lw=2, label=r'95\% quantiles')
+            plt.plot(X_l, alpha_p_t, color='g', lw=3, label=r'true')
+            plt.plot(X_, alpha_p_plugin, color='r', lw=3, label='rpredicted')
+            plt.ylim([0.0, 15.0])
+            plt.legend()
+            # plt.plot(X_, alpha_p_samples.var(0), color='r')
+            plt.title((r'Estimation of the quantiles of $Y(k,u)/Y^*(u)$'
+                       r' for generated samples $Y_i$ of $J$ via GP'))
+            plt.savefig(fig_name)
+            plt.close()
+        LB = np.quantile(alpha_p_samples, 0.05, axis=0)
+        v = np.var(alpha_p_samples, axis=0)
+        return k[LB.argmin()], alpha_p_plugin[LB.argmin()], k[v.argmax()]
+
     
     mp = margin_probability(gp, T, all_combinations, 1 - 0.025)
     vmp = mp * (1 - mp)
@@ -1849,16 +1981,28 @@ if __name__ == '__main__':
 
 
     def iteration_step(gp, p, al_lb, al_ub, all_combinations):
-        alpha_est = estimate_alpha_p(gp, all_combinations, p, [1], np.asarray([0, 1]),
-                                     al_lb,
-                                     al_ub)
+        global suf
+        # alpha_est = estimate_alpha_p(gp, all_combinations, p, [1], np.asarray([0, 1]),
+        #                              al_lb,
+        #                              al_ub)
+        alpha_est = 'notest'
+        print('start of iteration step')
         alpha_est_q = estimate_alpha_quantiles(gp, all_combinations,
                                                p, [1], np.asarray([0, 1]))
 
-        print('==> alpha_est: {}, {}'.format(alpha_est, alpha_est_q))
-        
+        kcand, alpha_est_bysamples, k_v = estimate_alpha_samples(gp, all_combinations, X_,
+                                                                p, [1], np.asarray([0, 1]),
+                                                                fig_name=('/home/victor/Bureau/tmp/'
+                                                                          'samples_{:02d}'.format(suf)))
+
+        print('==> alpha_est: {}, {}, {}'.format(alpha_est,
+                                                 alpha_est_q,
+                                                 alpha_est_bysamples))
+
+        alpha_est_used = alpha_est_bysamples
         ngrid = int(np.sqrt(len(all_combinations)))
-        m, s = mu_sigma_delta(gp, all_combinations, alpha_est_q, [1], np.asarray([0, 1]))
+        print(ngrid)
+        m, s = mu_sigma_delta(gp, all_combinations, alpha_est_used, [1], np.asarray([0, 1]))
         ppi = coverage_probability((m, s), 0, None).reshape(ngrid, ngrid)
         # gamma_hat = ppi.reshape(ngrid, ngrid).mean(1)
         (ppi * (1 - ppi)).reshape(ngrid, ngrid).mean(1)
@@ -1870,31 +2014,37 @@ if __name__ == '__main__':
         plt.plot(np.log(ppi.reshape(ngrid, ngrid).mean(1)))
         plt.axvline(ppi.reshape(ngrid, ngrid).mean(1).argmax())
         beta = 0.05
-        a = prob_less(m, s, alpha_est_q, all_combinations, beta / 2.0)
-        b = prob_less(m, s, alpha_est_q, all_combinations, 1 - beta / 2)
+        a = prob_less(m, s, alpha_est_used, all_combinations, beta / 2.0)
+        b = prob_less(m, s, alpha_est_used, all_combinations, 1 - beta / 2)
         plt.plot(np.log(a.reshape(ngrid, ngrid).mean(1)))
         plt.plot(np.log(b.reshape(ngrid, ngrid).mean(1)))
         plt.subplot(3, 1, 3)
-        global suf
         plt.plot((ppi * (1 - ppi)).reshape(ngrid, ngrid).mean(1), color='red')
-        plt.title('alpha: {}'.format(alpha_est_q))
+        plt.title('alpha: {}'.format(alpha_est_used))
         plt.tight_layout()
-        plt.savefig('/home/victor/Bureau/tmp/d_imse_{:02d}.png'.format(suf))
+        plt.savefig('/home/victor/Bureau/tmp/d_se_{:02d}.png'.format(suf))
         plt.close()
         with open('/home/victor/Bureau/tmp/alpha_est_new.txt', 'a+') as f:
-            f.write('{}, {}, {}, {}\n'.format(suf,
-                                          alpha_est, alpha_est_q,
-                                          ppi.reshape(ngrid, ngrid).mean(1).argmax()))
+            f.write('{}, {}, {}, {}, {}\n'.format(suf,
+                                                  alpha_est,
+                                                  alpha_est_q,
+                                                  alpha_est_bysamples,
+                                                  'no ppi'))
+                                                  #ppi.reshape(ngrid, ngrid).mean(1).argmax()))
         suf += 1
-        print('k with highest cov variance: {}'.format(kfix))
+        # print('k with highest cov variance: {}'.format(kfix))
         global al_est
-        al_est = alpha_est_q
-        ku = acquisition_IMSE(gp, alpha=alpha_est_q,
-                              nrestart=2,
+        al_est = alpha_est_bysamples
+        print('acquisition')
+        ku = acquisition_IMSE(gp, alpha=alpha_est_bysamples,
+                              nrestart=1,
                               integration_points=all_combinations_small,
                               bounds = np.asarray([[0, 1],
                                                    [0, 1]]))
-        print('ku with max variance: {}'.format(ku))
+        # ucand = acquisition_minprediction_variance(gp, k_v, alpha=al_est,
+        #                                            nrestart=5)
+        # ku = np.array([float(k_v), float(ucand)])
+        print('ku to add: {}'.format(ku))
         # ku = []
         # for i in (kfix, u):
         #     try:
@@ -1904,7 +2054,6 @@ if __name__ == '__main__':
         return ku
 
     # ku_to_eval = iteration_step(gp, 0.99, 1.5, 5.0, all_combinations)
-    
     # gp2 = add_points_to_design(gp, ku , function_2d(ku), optimize_cov=True)
 
 
@@ -1922,16 +2071,21 @@ if __name__ == '__main__':
 
     global suf
     global al_est
-    al_est=2.0
+    al_est = 1.8
     suf = 0
-    temp = template(gp, function_2d, lambda gp: iteration_step(gp, 0.99,
-                                                               1.5,
-                                                               5.0,
-                                                               all_combinations),
-                    criterion_fun=lambda gp, X: augmented_IMSE(gp, X, all_combinations_small, None, alpha=al_est),
-                    prefix='_imse_alpha',
+    temp = template(gp, function_2d,
+                    lambda gp: iteration_step(gp, 0.99,
+                                              1.5,
+                                              5.0,
+                                              all_combinations),
+                    # criterion_fun= lambda gp, X: augmented_IMSE(gp, X,
+                    #                                             all_combinations_small,
+                    #                                             None, alpha=al_est),
+                    criterion_fun= lambda gp, X: np.log(prediction_variance(gp, X,
+                                                                            alpha=al_est)),
+                    prefix='minsigma_LB_alpha',
                     X_=all_combinations,
-                    niterations=40,
+                    niterations=50,
                     plot=True,
                     bounds=np.asarray([[0, 1], [0, 1]]),
                     nrestart=2, save=True)
@@ -1945,7 +2099,7 @@ if __name__ == '__main__':
     plt.plot(al)
     plt.show()
 
-            
+
     ng = 100
     ls_ = np.linspace(0, 1, ng)
     xx, yy = np.meshgrid(ls_, ls_, indexing = 'ij')
